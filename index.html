@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0c0c0b" />
 <title>Perut Tracker</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💪</text></svg>" />
 <!-- Libraries are vendored locally so the page has no CDN dependency. -->
@@ -11,139 +12,199 @@
 <script src="vendor/supabase.js"></script>
 <script src="config.js"></script>
 <style>
+  /* Gym-poster theme: committed dark look. Chart series colors are the
+     validated dark-surface categorical palette. */
   :root {
-    --page: #f9f9f7;
-    --surface-1: #fcfcfb;
-    --text-primary: #0b0b0b;
-    --text-secondary: #52514e;
+    --page: #0c0c0b;
+    --surface-1: #1a1a19;
+    --surface-2: #222220;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
     --text-muted: #898781;
-    --grid: #e1e0d9;
-    --axis: #c3c2b7;
-    --border: rgba(11, 11, 11, 0.10);
-    --accent: #2a78d6;
-    --accent-ink: #ffffff;
-    --warn-bg: #fdf3d7;
-    --warn-border: #eda100;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --page: #0d0d0d;
-      --surface-1: #1a1a19;
-      --text-primary: #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted: #898781;
-      --grid: #2c2c2a;
-      --axis: #383835;
-      --border: rgba(255, 255, 255, 0.10);
-      --accent: #3987e5;
-      --accent-ink: #ffffff;
-      --warn-bg: #33290e;
-      --warn-border: #c98500;
-    }
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --volt: #c9f31d;          /* action color: buttons & highlights only, never a chart series */
+    --volt-ink: #0c0c0b;
+    --good: #0ca30c;
+    --bad: #e66767;
+    --warn-bg: #33290e;
+    --warn-border: #c98500;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: var(--page);
+    background:
+      radial-gradient(1200px 500px at 50% -200px, #1e1e17 0%, var(--page) 60%),
+      var(--page);
     color: var(--text-primary);
     line-height: 1.5;
   }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
-  header h1 { margin: 8px 0 0; font-size: 1.7rem; }
-  header p { margin: 4px 0 0; color: var(--text-secondary); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 16px 64px; }
+
+  .display {
+    font-family: Impact, "Arial Black", system-ui, sans-serif;
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.05;
+  }
+  header h1 {
+    margin: 4px 0 0;
+    font-size: clamp(2.2rem, 8vw, 3.4rem);
+  }
+  header h1 .volt { color: var(--volt); }
+  header .tagline {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.98rem;
+  }
+  .quote {
+    margin: 14px 0 0;
+    padding: 10px 14px;
+    border-left: 4px solid var(--volt);
+    background: var(--surface-1);
+    border-radius: 0 10px 10px 0;
+    color: var(--text-primary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.95rem;
+  }
 
   .card {
     background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 20px;
     margin-top: 20px;
   }
   .banner {
     background: var(--warn-bg);
     border: 1px solid var(--warn-border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 12px 16px;
     margin-top: 20px;
     font-size: 0.92rem;
-    color: var(--text-primary);
   }
   .banner a { color: inherit; }
 
-  label { display: block; font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 4px; }
+  label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
   input[type="text"], input[type="number"], input[type="date"] {
     width: 100%;
-    padding: 10px 12px;
-    font-size: 1rem;
+    padding: 12px 14px;
+    font-size: 1.05rem;
+    font-weight: 600;
     color: var(--text-primary);
     background: var(--page);
     border: 1px solid var(--axis);
-    border-radius: 8px;
+    border-radius: 10px;
+    color-scheme: dark;
   }
-  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  input:focus { outline: 2px solid var(--volt); outline-offset: 1px; border-color: transparent; }
 
   .btn {
     display: inline-block;
     border: none;
-    border-radius: 10px;
-    padding: 10px 18px;
+    border-radius: 12px;
+    padding: 12px 22px;
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     cursor: pointer;
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--volt);
+    color: var(--volt-ink);
   }
-  .btn:hover { filter: brightness(1.08); }
+  .btn:hover { filter: brightness(1.1); }
   .btn:disabled { opacity: 0.5; cursor: default; }
   .btn-big {
     width: 100%;
-    padding: 18px;
-    font-size: 1.25rem;
-    border-radius: 14px;
+    padding: 20px;
+    font-size: clamp(1.15rem, 4.5vw, 1.5rem);
+    border-radius: 16px;
+    box-shadow: 0 0 28px rgba(201, 243, 29, 0.28);
   }
   .btn-ghost {
     background: transparent;
-    color: var(--accent);
+    color: var(--text-secondary);
     border: 1px solid var(--axis);
-    font-weight: 500;
+    box-shadow: none;
   }
-  .chip-row { display: flex; gap: 8px; margin: 10px 0 14px; }
+  .chip-row { display: flex; gap: 8px; margin: 12px 0 16px; flex-wrap: wrap; }
   .chip {
     border: 1px solid var(--axis);
     background: var(--page);
     color: var(--text-primary);
     border-radius: 999px;
-    padding: 6px 16px;
+    padding: 8px 18px;
     font-size: 0.95rem;
+    font-weight: 700;
     cursor: pointer;
   }
-  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip:hover { border-color: var(--volt); color: var(--volt); }
 
   .field-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
   .field-row > div { flex: 1 1 140px; }
 
   .who-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .who-line strong { font-size: 1.1rem; }
+  .who-line .label-sm {
+    font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+  }
+  .who-line strong { font-size: 1.3rem; }
   .link-btn {
     background: none; border: none; padding: 0;
     color: var(--text-muted); font-size: 0.85rem;
     cursor: pointer; text-decoration: underline;
   }
 
-  .chart-card h2 { margin: 0 0 2px; font-size: 1.05rem; }
+  /* Stat tiles: hero numbers for the current athlete */
+  .stats { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+  .stat {
+    flex: 1 1 150px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .stat .k {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted);
+  }
+  .stat .v { font-size: 2rem; font-weight: 900; line-height: 1.15; }
+  .stat .v .unit { font-size: 0.9rem; font-weight: 700; color: var(--text-secondary); }
+  .stat .d { font-size: 0.85rem; font-weight: 700; margin-top: 2px; }
+  .d.down { color: var(--good); }
+  .d.up { color: var(--bad); }
+  .d.flat { color: var(--text-muted); }
+
+  .chart-card h2 { margin: 0 0 2px; font-size: 1.25rem; }
   .chart-card .sub { margin: 0 0 12px; font-size: 0.85rem; color: var(--text-muted); }
   .chart-box { position: relative; height: 300px; }
 
   table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
-  th { color: var(--text-secondary); font-weight: 600; }
-  td.num { font-variant-numeric: tabular-nums; }
-  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; }
+  th {
+    color: var(--text-muted); font-weight: 700; font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
 
-  .msg { font-size: 0.9rem; margin-top: 10px; color: var(--text-secondary); min-height: 1.4em; }
-  .msg.ok { color: #0ca30c; }
-  .msg.err { color: #d03b3b; }
+  .msg { font-size: 0.95rem; margin-top: 10px; color: var(--text-secondary); min-height: 1.4em; font-weight: 600; }
+  .msg.ok { color: var(--volt); text-transform: uppercase; letter-spacing: 0.03em; }
+  .msg.err { color: var(--bad); }
   .hidden { display: none !important; }
   footer { margin-top: 32px; font-size: 0.8rem; color: var(--text-muted); text-align: center; }
 </style>
@@ -151,8 +212,9 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>💪 Perut Tracker</h1>
-    <p>Weight &amp; lingkar perut, tracked together with friends.</p>
+    <h1 class="display">Perut <span class="volt">Tracker</span> 💪</h1>
+    <p class="tagline">Weight &amp; lingkar perut — tracked together. No excuses, just progress.</p>
+    <p class="quote" id="quote"></p>
   </header>
 
   <div id="demo-banner" class="banner hidden">
@@ -165,15 +227,15 @@
 
   <!-- Step 1: who are you? -->
   <section id="name-gate" class="card hidden">
-    <h2 style="margin-top:0">First, who are you?</h2>
-    <p style="color:var(--text-secondary); margin:4px 0 0">
-      Enter your name once — your check-ins will be saved under it and shown on the shared graphs.
+    <h2 class="display" style="margin-top:0; font-size:1.6rem">Who's grinding today?</h2>
+    <p style="color:var(--text-secondary); margin:6px 0 0">
+      Enter your name once — your check-ins go on the shared board so the crew can see your progress.
     </p>
     <div class="chip-row" id="known-user-chips"></div>
     <label for="name-input">Your name</label>
     <input id="name-input" type="text" placeholder="e.g. Ahmad or Ian" autocomplete="name" maxlength="40" />
-    <div style="margin-top:14px">
-      <button class="btn" id="name-save-btn">Let's go</button>
+    <div style="margin-top:16px">
+      <button class="btn" id="name-save-btn">Let's go 🔥</button>
     </div>
     <div class="msg" id="name-msg"></div>
   </section>
@@ -182,12 +244,15 @@
   <main id="app" class="hidden">
     <section class="card">
       <div class="who-line">
-        <span style="color:var(--text-secondary)">Sharing as</span>
-        <strong id="current-name"></strong>
+        <span class="label-sm">Athlete</span>
+        <strong class="display" id="current-name"></strong>
         <button class="link-btn" id="switch-user-btn">not you? switch</button>
       </div>
-      <div style="margin-top:16px">
-        <button class="btn btn-big" id="share-btn">📣 Share my progress</button>
+
+      <div class="stats" id="stats" aria-label="Your progress since your first check-in"></div>
+
+      <div style="margin-top:18px">
+        <button class="btn btn-big display" id="share-btn">🔥 Share my progress</button>
       </div>
       <form id="entry-form" class="hidden" style="margin-top:16px">
         <div class="field-row">
@@ -213,19 +278,19 @@
     </section>
 
     <section class="card chart-card">
-      <h2>Weight</h2>
-      <p class="sub">kg over time, one line per person</p>
+      <h2 class="display">The Board — Weight</h2>
+      <p class="sub">kg over time, one line per athlete</p>
       <div class="chart-box"><canvas id="weight-chart" role="img" aria-label="Timeline of weight in kilograms per person"></canvas></div>
     </section>
 
     <section class="card chart-card">
-      <h2>Lingkar perut</h2>
-      <p class="sub">cm over time, one line per person</p>
+      <h2 class="display">The Board — Lingkar Perut</h2>
+      <p class="sub">cm over time, one line per athlete</p>
       <div class="chart-box"><canvas id="waist-chart" role="img" aria-label="Timeline of waist circumference in centimeters per person"></canvas></div>
     </section>
 
     <section class="card">
-      <h2 style="margin:0 0 12px; font-size:1.05rem">Recent check-ins</h2>
+      <h2 class="display" style="margin:0 0 12px; font-size:1.25rem">Recent check-ins</h2>
       <div style="overflow-x:auto">
         <table>
           <thead>
@@ -237,25 +302,41 @@
         </table>
       </div>
     </section>
-  </main>
 
-  <footer>Made for Ahmad &amp; Ian — but anyone can join, just enter your name.</footer>
+    <footer>Made for Ahmad &amp; Ian — but any friend can join the grind. Just enter your name.</footer>
+  </main>
 </div>
 
 <script>
 "use strict";
 
-/* ── Series colors (validated categorical palette; fixed order, never cycled;
-      users beyond slot 8 reuse muted gray and rely on the legend/table) ── */
-const SERIES_LIGHT = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"];
-const SERIES_DARK  = ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#e66767", "#d55181", "#d95926"];
+/* ── Series colors (validated categorical palette for the dark surface;
+      fixed order, never cycled; users beyond slot 8 get muted gray and
+      rely on the legend/table) ── */
+const SERIES = ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#e66767", "#d55181", "#d95926"];
 const OVERFLOW_COLOR = "#898781";
-
-const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-const isDark = () => darkQuery.matches;
-const seriesColor = (i) =>
-  i < 8 ? (isDark() ? SERIES_DARK : SERIES_LIGHT)[i] : OVERFLOW_COLOR;
+const seriesColor = (i) => (i < 8 ? SERIES[i] : OVERFLOW_COLOR);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ── Motivation ────────────────────────────────────────────────────────────── */
+const QUOTES = [
+  "No pain, no gain.",
+  "Discipline beats motivation.",
+  "Konsisten itu kunci. 🔑",
+  "Perut sixpack dimulai hari ini.",
+  "Small steps. Big results.",
+  "Sedikit lagi — jangan nyerah!",
+  "Every kg down is a win.",
+  "Show up. Log it. Repeat.",
+];
+const SUCCESS_MSGS = [
+  "Beast mode! Logged. 🔥",
+  "Mantap! Konsisten itu kunci 💪",
+  "Logged! The crew can see it now 😤",
+  "Another one on the board! 🏋️",
+  "Progress shared. Keep grinding! ⚡",
+];
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 /* ── Backends: Supabase when configured, localStorage demo otherwise ──────── */
 const nameKeyOf = (name) => name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -439,6 +520,34 @@ function renderCharts() {
   buildChart("waist", "waist_cm", "cm");
 }
 
+/* Hero stat tiles: current value + change since first check-in (down = win). */
+function renderStats() {
+  const box = $("stats");
+  const me = cache.users.find((u) => u.name === localStorage.getItem(NAME_STORE));
+  if (!me) { box.innerHTML = ""; return; }
+  const tiles = [
+    { key: "weight_kg", label: "Weight", unit: "kg" },
+    { key: "waist_cm", label: "Lingkar perut", unit: "cm" },
+  ].map(({ key, label, unit }) => {
+    const mine = cache.measurements.filter((m) => m.user_id === me.id && m[key] != null);
+    if (!mine.length) {
+      return `<div class="stat"><div class="k">${label}</div>
+        <div class="v" style="color:var(--text-muted)">—</div>
+        <div class="d flat">log your first check-in</div></div>`;
+    }
+    const first = Number(mine[0][key]);
+    const now = Number(mine[mine.length - 1][key]);
+    const delta = +(now - first).toFixed(1);
+    let d;
+    if (mine.length < 2 || delta === 0) d = `<div class="d flat">— steady since start</div>`;
+    else if (delta < 0) d = `<div class="d down">▼ ${Math.abs(delta)} ${unit} since start 🔥</div>`;
+    else d = `<div class="d up">▲ ${delta} ${unit} since start</div>`;
+    return `<div class="stat"><div class="k">${label}</div>
+      <div class="v">${now} <span class="unit">${unit}</span></div>${d}</div>`;
+  });
+  box.innerHTML = tiles.join("");
+}
+
 function renderTable() {
   const tbody = $("entries-tbody");
   const byId = Object.fromEntries(cache.users.map((u) => [u.id, u]));
@@ -462,6 +571,7 @@ function renderTable() {
 async function refreshData() {
   const [users, measurements] = await Promise.all([backend.listUsers(), backend.listMeasurements()]);
   cache = { users, measurements };
+  renderStats();
   renderCharts();
   renderTable();
 }
@@ -556,7 +666,7 @@ $("entry-form").addEventListener("submit", async (e) => {
     const user = await backend.ensureUser(localStorage.getItem(NAME_STORE));
     await backend.addMeasurement({ user_id: user.id, weight_kg: weight, waist_cm: waist, measured_at: measuredAt });
     await refreshData();
-    msg.textContent = backend.shared ? "Shared! Your friends can see it now. 🎉" : "Saved locally (demo mode). 🎉";
+    msg.textContent = backend.shared ? pick(SUCCESS_MSGS) : "Saved locally (demo mode). 🎉";
     msg.className = "msg ok";
     $("weight-input").value = "";
     $("waist-input").value = "";
@@ -569,11 +679,8 @@ $("entry-form").addEventListener("submit", async (e) => {
   }
 });
 
-darkQuery.addEventListener("change", () => {
-  if (!app.classList.contains("hidden")) { renderCharts(); renderTable(); }
-});
-
 /* ── Boot ──────────────────────────────────────────────────────────────────── */
+$("quote").textContent = "“" + pick(QUOTES) + "”";
 if (!backend.shared) $("demo-banner").classList.remove("hidden");
 const savedName = localStorage.getItem(NAME_STORE);
 if (savedName) showApp(savedName); else showNameGate();
