@@ -81,6 +81,34 @@ Either metric can be left empty on a check-in (but not both). Row Level
 Security allows the public key to **read and insert only** — no updates or
 deletes — so shared history can't be wiped by anyone who has the page URL.
 
+## Daily reminders — push notifications (optional)
+
+If someone hasn't checked in for 5 days, the app can send their devices a
+push notification ("sudah 5 hari tanpa check-in…"). A scheduled GitHub
+Actions job ([`reminders.yml`](.github/workflows/reminders.yml), 08:00 WIB
+daily) checks Supabase and pushes via
+[`scripts/send-reminders.mjs`](scripts/send-reminders.mjs).
+
+**Until you finish this setup everything stays dormant and green** — the
+in-app button is hidden and the scheduled job skips with a notice. It turns
+itself on automatically once the pieces below exist:
+
+1. Run the `push_subscriptions` block at the bottom of
+   [`setup.sql`](setup.sql) in the Supabase SQL editor (just that block if
+   you ran the rest earlier).
+2. Generate a VAPID keypair: `npx web-push generate-vapid-keys`.
+   Paste the **public** key into `config.js` → `vapidPublicKey`.
+3. Add two repository secrets (Settings → Secrets and variables → Actions):
+   - `VAPID_PRIVATE_KEY` — the private key from step 2
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase → Project Settings → API →
+     `service_role` (secret) key. Never put this one in `config.js`.
+4. Everyone opens the app and taps **Enable daily reminders** (allow
+   notifications). iPhone note: iOS requires the app to be installed via
+   Share → Add to Home Screen first (iOS 16.4+).
+
+To test without waiting for the schedule: Actions → "Daily check-in
+reminders" → Run workflow.
+
 ## Brand assets
 
 Everything lives in [`assets/`](assets/): `mark.svg` (icon, source of truth),

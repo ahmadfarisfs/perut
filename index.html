@@ -330,6 +330,10 @@
         </div>
         <div class="msg" id="entry-msg"></div>
       </form>
+      <div style="margin-top:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+        <button class="btn btn-ghost btn-small hidden" id="reminders-btn">Enable daily reminders</button>
+        <span class="hidden" id="reminders-on" style="font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted)">Reminders on — we'll nudge you after 5 quiet days</span>
+      </div>
     </section>
 
     <section class="card chart-card">
@@ -441,6 +445,11 @@ function makeSupabaseBackend(url, key) {
     async addMeasurement(row) {
       const { error } = await client.from("measurements").insert(row);
       if (error) throw error;
+    },
+    async addPushSubscription(row) {
+      const { error } = await client.from("push_subscriptions").insert(row);
+      // 23505 = this device is already registered; that's fine.
+      if (error && error.code !== "23505") throw error;
     },
   };
 }
@@ -682,6 +691,7 @@ async function showApp(name) {
   nameGate.classList.add("hidden");
   app.classList.remove("hidden");
   $("date-input").value = new Date().toISOString().slice(0, 10);
+  refreshRemindersUI();
   try {
     await refreshData();
   } catch (e) {
@@ -737,6 +747,65 @@ $("entry-form").addEventListener("submit", async (e) => {
     msg.className = "msg err";
   } finally {
     $("submit-btn").disabled = false;
+  }
+});
+
+/* ── Daily reminders (push) ────────────────────────────────────────────────
+   Fully optional: the button only appears when a VAPID public key is present
+   in config.js, the backend is shared, and the browser supports push. Until
+   the setup is finished nothing shows and nothing runs — and once the key is
+   deployed, the feature switches on by itself. */
+const VAPID_KEY = (cfg.vapidPublicKey || "").trim();
+
+function vapidToU8(base64) {
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  const raw = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+const pushSupported = () =>
+  backend.shared && VAPID_KEY && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+async function refreshRemindersUI() {
+  const btn = $("reminders-btn"), on = $("reminders-on");
+  btn.classList.add("hidden");
+  on.classList.add("hidden");
+  if (!pushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) on.classList.remove("hidden");
+    else if (Notification.permission !== "denied") btn.classList.remove("hidden");
+  } catch (e) {
+    console.warn("reminders unavailable", e);
+  }
+}
+
+$("reminders-btn").addEventListener("click", async () => {
+  const btn = $("reminders-btn");
+  btn.disabled = true;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: vapidToU8(VAPID_KEY),
+    });
+    const user = await backend.ensureUser(localStorage.getItem(NAME_STORE));
+    const json = sub.toJSON();
+    await backend.addPushSubscription({
+      user_id: user.id,
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+    });
+  } catch (e) {
+    console.warn("could not enable reminders", e);
+    btn.textContent = "Reminders unavailable on this device";
+  } finally {
+    btn.disabled = false;
+    refreshRemindersUI();
   }
 });
 

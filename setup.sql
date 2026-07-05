@@ -46,3 +46,25 @@ create policy "anyone can read measurements"
 
 create policy "anyone can share progress"
   on public.measurements for insert with check (true);
+
+-- ── Push reminders (optional feature) ────────────────────────────────────────
+-- If you already ran the tables above, you can run just this block.
+-- Devices register here when a user taps "Enable daily reminders". The anon
+-- key may only INSERT: endpoints are capability URLs, so nobody may read or
+-- delete them with the public key. The daily reminder job (GitHub Actions)
+-- reads and prunes them with the service_role key, which bypasses RLS.
+
+create table if not exists public.push_subscriptions (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.users (id) on delete cascade,
+  endpoint   text not null unique,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "anyone can enable reminders" on public.push_subscriptions;
+create policy "anyone can enable reminders"
+  on public.push_subscriptions for insert with check (true);

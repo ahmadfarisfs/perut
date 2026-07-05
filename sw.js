@@ -39,6 +39,29 @@ self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
+/* Daily check-in reminders arrive here (sent by the reminders workflow). */
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data.json(); } catch { /* fall back to defaults */ }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Perut Tracker", {
+      body: data.body || "Waktunya check-in.",
+      icon: "./assets/icon-192.png",
+      badge: "./assets/icon-192.png",
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const win of wins) if ("focus" in win) return win.focus();
+      return self.clients.openWindow("./");
+    })
+  );
+});
+
 /* App shell: cache-first (the whole shell is versioned atomically per deploy).
    Anything cross-origin — the Supabase API — is never intercepted, so data
    is always live. */

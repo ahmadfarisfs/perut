@@ -1,0 +1,26 @@
+name: Daily check-in reminders
+
+on:
+  schedule:
+    - cron: "0 1 * * *" # 08:00 WIB every morning
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    env:
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-save web-push@3
+      # The script exits successfully with a "setup incomplete, skipping"
+      # notice while the secrets or the VAPID public key are missing, so this
+      # workflow stays green until the feature is actually configured.
+      - run: node scripts/send-reminders.mjs

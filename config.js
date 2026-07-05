@@ -8,4 +8,10 @@
 window.PERUT_CONFIG = {
   supabaseUrl: "https://oiikmtwbbutscinnnqtw.supabase.co", // e.g. "https://abcdefghijkl.supabase.co"
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9paWttdHdiYnV0c2Npbm5ucXR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxOTQ4NDAsImV4cCI6MjA5ODc3MDg0MH0.VDpTHwfi8BWempDkzq4x6rWEcEJhn9QuYWwa-ys0RoQ", // the long "anon public" key from Project Settings → API
+
+  // Optional: enables the "daily reminders" push feature. Generate a keypair
+  // with `npx web-push generate-vapid-keys`, paste the PUBLIC key here, and
+  // add the private key as the VAPID_PRIVATE_KEY repository secret.
+  // While this is empty the reminders button simply stays hidden.
+  vapidPublicKey: "",
 };
