@@ -61,6 +61,21 @@
     color: var(--text-secondary);
     font-size: 0.98rem;
   }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+  .pill .pdot { width: 7px; height: 7px; border-radius: 50%; }
   .quote {
     margin: 14px 0 0;
     padding: 10px 14px;
@@ -214,6 +229,7 @@
   <header>
     <h1 class="display">Perut <span class="volt">Tracker</span> 💪</h1>
     <p class="tagline">Weight &amp; lingkar perut — tracked together. No excuses, just progress.</p>
+    <span class="pill" id="storage-pill"></span>
     <p class="quote" id="quote"></p>
   </header>
 
@@ -681,6 +697,14 @@ $("entry-form").addEventListener("submit", async (e) => {
 
 /* ── Boot ──────────────────────────────────────────────────────────────────── */
 $("quote").textContent = "“" + pick(QUOTES) + "”";
+const pill = $("storage-pill");
+if (backend.shared) {
+  pill.innerHTML = '<span class="pdot" style="background:var(--good)"></span>Shared · Supabase';
+  pill.title = "Check-ins sync to the shared database — the whole crew sees them";
+} else {
+  pill.innerHTML = '<span class="pdot" style="background:#c98500"></span>Local · this browser only';
+  pill.title = "No database configured — check-ins stay on this device";
+}
 if (!backend.shared) $("demo-banner").classList.remove("hidden");
 const savedName = localStorage.getItem(NAME_STORE);
 if (savedName) showApp(savedName); else showNameGate();
