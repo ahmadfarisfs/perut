@@ -25,6 +25,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Stamp service worker with commit SHA
+        run: sed -i "s/__VERSION__/${GITHUB_SHA::7}/" sw.js
       - uses: actions/configure-pages@v5
         with:
           enablement: true

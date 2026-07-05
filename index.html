@@ -234,6 +234,25 @@
   td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
 
+  .toast {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 18px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: calc(100vw - 32px);
+    padding: 12px 14px 12px 18px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .btn-small { padding: 8px 16px; font-size: 0.85rem; border-radius: 9px; }
   .msg { font-size: 0.95rem; margin-top: 10px; color: var(--text-secondary); min-height: 1.4em; font-weight: 600; }
   .msg.ok { color: var(--volt); text-transform: uppercase; letter-spacing: 0.03em; }
   .msg.err { color: var(--bad); }
@@ -339,8 +358,16 @@
       </div>
     </section>
 
-    <footer>Made for Ahmad &amp; Ian — but any friend can join the grind. Just enter your name.</footer>
+    <footer>
+      <button class="btn btn-ghost btn-small hidden" id="install-btn" style="margin-bottom:14px">Install app</button>
+      <div>Made for Ahmad &amp; Ian — but any friend can join the grind. Just enter your name.</div>
+    </footer>
   </main>
+</div>
+
+<div id="update-toast" class="toast hidden" role="status">
+  <span>A new version is ready.</span>
+  <button class="btn btn-small" id="update-btn">Update</button>
 </div>
 
 <script>
@@ -356,14 +383,12 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 
 /* ── Motivation ────────────────────────────────────────────────────────────── */
 const QUOTES = [
-  "No pain, no gain.",
-  "Discipline beats motivation.",
-  "Konsisten itu kunci.",
-  "Perut sixpack dimulai hari ini.",
-  "Small steps. Big results.",
-  "Sedikit lagi — jangan nyerah.",
-  "Every kg down is a win.",
-  "Show up. Log it. Repeat.",
+  "Sehat dulu, istri baru menyusul.",
+  "Perut rata, percaya diri naik, pinangan lancar.",
+  "Sehat itu investasi terbaik — mulai hari ini.",
+  "Kuat sekarang, bebas obat nanti.",
+  "Selamat tinggal, sakit pinggang.",
+  "Pinggang kuat, gerak bebas, hidup nyaman.",
 ];
 const SUCCESS_MSGS = [
   "Beast mode. Logged.",
@@ -715,8 +740,60 @@ $("entry-form").addEventListener("submit", async (e) => {
   }
 });
 
+/* ── PWA: install prompt + service worker with update toast ───────────────── */
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  $("install-btn").classList.remove("hidden");
+});
+$("install-btn").addEventListener("click", async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  $("install-btn").classList.add("hidden");
+});
+
+function showUpdateToast(reg) {
+  $("update-toast").classList.remove("hidden");
+  $("update-btn").onclick = () => {
+    $("update-btn").disabled = true;
+    if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+  };
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").then((reg) => {
+    // A version that finished downloading on a previous visit.
+    if (reg.waiting) showUpdateToast(reg);
+    // A version that arrives while the app is open.
+    reg.addEventListener("updatefound", () => {
+      const worker = reg.installing;
+      if (!worker) return;
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) showUpdateToast(reg);
+      });
+    });
+    // Look for updates when the app regains focus, and hourly.
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update(); });
+    setInterval(() => reg.update(), 60 * 60 * 1000);
+  }).catch((e) => console.warn("sw registration failed", e));
+
+  // The new worker took over (user tapped Update) — load the new version once.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+}
+
 /* ── Boot ──────────────────────────────────────────────────────────────────── */
-$("quote").textContent = "“" + pick(QUOTES) + "”";
+let quoteIdx = Math.floor(Math.random() * QUOTES.length);
+const showQuote = () => { $("quote").textContent = "“" + QUOTES[quoteIdx++ % QUOTES.length] + "”"; };
+showQuote();
+setInterval(showQuote, 12000);
 const pill = $("storage-pill");
 if (backend.shared) {
   pill.innerHTML = '<span class="pdot" style="background:var(--good)"></span>Shared · Supabase';
