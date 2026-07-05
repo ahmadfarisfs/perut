@@ -1,4 +1,8 @@
-# 💪 Perut Tracker
+<p align="center">
+  <img src="assets/logo.png" alt="Perut Tracker" width="440" />
+</p>
+
+# Perut Tracker
 
 A tiny shared weight & lingkar perut (waist) tracker for Ahmad, Ian — and any
 friend who wants to join. It's a static page (perfect for GitHub Pages) with a
@@ -76,6 +80,14 @@ Designed to be general so more people can join later:
 Either metric can be left empty on a check-in (but not both). Row Level
 Security allows the public key to **read and insert only** — no updates or
 deletes — so shared history can't be wiped by anyone who has the page URL.
+
+## Brand assets
+
+Everything lives in [`assets/`](assets/): `mark.svg` (icon, source of truth),
+`logo.png` (horizontal lockup, transparent), `favicon.svg`,
+`apple-touch-icon.png`, `icon-192.png` / `icon-512.png` (PWA icons via
+`site.webmanifest`), and `og.png` (social share card). Brand colors: volt
+`#c9f31d` on near-black `#0c0c0b`, white `#ffffff` for primary text.
 
 ## Other free database options considered
 

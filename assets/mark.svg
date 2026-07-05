@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Perut Tracker logo">
+  <!-- Perut Tracker mark: a barbell tilted downward like a falling trend line,
+       with a data-point node on the bar — strength plus tracked progress. -->
+  <rect width="64" height="64" rx="14" fill="#0c0c0b"/>
+  <g transform="rotate(-8 32 32)">
+    <line x1="9" y1="32" x2="55" y2="32" stroke="#c9f31d" stroke-width="4.6" stroke-linecap="round"/>
+    <rect x="12" y="22" width="7" height="20" rx="3" fill="#c9f31d"/>
+    <rect x="45" y="22" width="7" height="20" rx="3" fill="#c9f31d"/>
+    <rect x="20.2" y="26" width="3.6" height="12" rx="1.8" fill="#c9f31d"/>
+    <rect x="40.2" y="26" width="3.6" height="12" rx="1.8" fill="#c9f31d"/>
+    <circle cx="35" cy="32" r="2.7" fill="#ffffff"/>
+  </g>
+</svg>

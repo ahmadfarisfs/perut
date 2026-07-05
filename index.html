@@ -5,7 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#0c0c0b" />
 <title>Perut Tracker</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💪</text></svg>" />
+<meta name="description" content="Weight & lingkar perut — tracked together." />
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+<link rel="manifest" href="assets/site.webmanifest" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://ahmadfarisfs.github.io/perut/" />
+<meta property="og:title" content="Perut Tracker" />
+<meta property="og:description" content="Weight & lingkar perut — tracked together." />
+<meta property="og:image" content="https://ahmadfarisfs.github.io/perut/assets/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <!-- Libraries are vendored locally so the page has no CDN dependency. -->
 <script src="vendor/chart.umd.js"></script>
 <script src="vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -51,9 +60,17 @@
     letter-spacing: 0.02em;
     line-height: 1.05;
   }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    width: clamp(44px, 10vw, 58px);
+    height: auto;
+    border-radius: 13px;
+    border: 1px solid var(--border);
+    flex: none;
+  }
   header h1 {
-    margin: 4px 0 0;
-    font-size: clamp(2.2rem, 8vw, 3.4rem);
+    margin: 0;
+    font-size: clamp(2rem, 7.5vw, 3.2rem);
   }
   header h1 .volt { color: var(--volt); }
   header .tagline {
@@ -227,7 +244,10 @@
 <body>
 <div class="wrap">
   <header>
-    <h1 class="display">Perut <span class="volt">Tracker</span> 💪</h1>
+    <div class="brand">
+      <img src="assets/mark.svg" alt="Perut Tracker logo" class="brand-mark" width="58" height="58" />
+      <h1 class="display">Perut <span class="volt">Tracker</span></h1>
+    </div>
     <p class="tagline">Weight &amp; lingkar perut — tracked together. No excuses, just progress.</p>
     <span class="pill" id="storage-pill"></span>
     <p class="quote" id="quote"></p>
@@ -251,7 +271,7 @@
     <label for="name-input">Your name</label>
     <input id="name-input" type="text" placeholder="e.g. Ahmad or Ian" autocomplete="name" maxlength="40" />
     <div style="margin-top:16px">
-      <button class="btn" id="name-save-btn">Let's go 🔥</button>
+      <button class="btn" id="name-save-btn">Let's go</button>
     </div>
     <div class="msg" id="name-msg"></div>
   </section>
@@ -268,7 +288,7 @@
       <div class="stats" id="stats" aria-label="Your progress since your first check-in"></div>
 
       <div style="margin-top:18px">
-        <button class="btn btn-big display" id="share-btn">🔥 Share my progress</button>
+        <button class="btn btn-big display" id="share-btn">Share my progress</button>
       </div>
       <form id="entry-form" class="hidden" style="margin-top:16px">
         <div class="field-row">
@@ -313,7 +333,7 @@
             <tr><th>Date</th><th>Who</th><th>Weight (kg)</th><th>Lingkar perut (cm)</th></tr>
           </thead>
           <tbody id="entries-tbody">
-            <tr><td colspan="4" style="color:var(--text-muted)">No check-ins yet — be the first! 🎉</td></tr>
+            <tr><td colspan="4" style="color:var(--text-muted)">No check-ins yet — be the first.</td></tr>
           </tbody>
         </table>
       </div>
@@ -338,19 +358,19 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 const QUOTES = [
   "No pain, no gain.",
   "Discipline beats motivation.",
-  "Konsisten itu kunci. 🔑",
+  "Konsisten itu kunci.",
   "Perut sixpack dimulai hari ini.",
   "Small steps. Big results.",
-  "Sedikit lagi — jangan nyerah!",
+  "Sedikit lagi — jangan nyerah.",
   "Every kg down is a win.",
   "Show up. Log it. Repeat.",
 ];
 const SUCCESS_MSGS = [
-  "Beast mode! Logged. 🔥",
-  "Mantap! Konsisten itu kunci 💪",
-  "Logged! The crew can see it now 😤",
-  "Another one on the board! 🏋️",
-  "Progress shared. Keep grinding! ⚡",
+  "Beast mode. Logged.",
+  "Mantap! Konsisten itu kunci.",
+  "Logged — the crew can see it now.",
+  "Another one on the board.",
+  "Progress shared. Keep grinding.",
 ];
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -556,7 +576,7 @@ function renderStats() {
     const delta = +(now - first).toFixed(1);
     let d;
     if (mine.length < 2 || delta === 0) d = `<div class="d flat">— steady since start</div>`;
-    else if (delta < 0) d = `<div class="d down">▼ ${Math.abs(delta)} ${unit} since start 🔥</div>`;
+    else if (delta < 0) d = `<div class="d down">▼ ${Math.abs(delta)} ${unit} since start</div>`;
     else d = `<div class="d up">▲ ${delta} ${unit} since start</div>`;
     return `<div class="stat"><div class="k">${label}</div>
       <div class="v">${now} <span class="unit">${unit}</span></div>${d}</div>`;
@@ -682,7 +702,7 @@ $("entry-form").addEventListener("submit", async (e) => {
     const user = await backend.ensureUser(localStorage.getItem(NAME_STORE));
     await backend.addMeasurement({ user_id: user.id, weight_kg: weight, waist_cm: waist, measured_at: measuredAt });
     await refreshData();
-    msg.textContent = backend.shared ? pick(SUCCESS_MSGS) : "Saved locally (demo mode). 🎉";
+    msg.textContent = backend.shared ? pick(SUCCESS_MSGS) : "Saved locally (demo mode).";
     msg.className = "msg ok";
     $("weight-input").value = "";
     $("waist-input").value = "";
