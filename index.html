@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Perut Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💪</text></svg>" />
+<!-- Libraries are vendored locally so the page has no CDN dependency. -->
+<script src="vendor/chart.umd.js"></script>
+<script src="vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --warn-bg: #fdf3d7;
+    --warn-border: #eda100;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface-1: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #3987e5;
+      --accent-ink: #ffffff;
+      --warn-bg: #33290e;
+      --warn-border: #c98500;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  header h1 { margin: 8px 0 0; font-size: 1.7rem; }
+  header p { margin: 4px 0 0; color: var(--text-secondary); }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+  .banner {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 20px;
+    font-size: 0.92rem;
+    color: var(--text-primary);
+  }
+  .banner a { color: inherit; }
+
+  label { display: block; font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 4px; }
+  input[type="text"], input[type="number"], input[type="date"] {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 1rem;
+    color: var(--text-primary);
+    background: var(--page);
+    border: 1px solid var(--axis);
+    border-radius: 8px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+
+  .btn {
+    display: inline-block;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn-big {
+    width: 100%;
+    padding: 18px;
+    font-size: 1.25rem;
+    border-radius: 14px;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--axis);
+    font-weight: 500;
+  }
+  .chip-row { display: flex; gap: 8px; margin: 10px 0 14px; }
+  .chip {
+    border: 1px solid var(--axis);
+    background: var(--page);
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  .field-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .field-row > div { flex: 1 1 140px; }
+
+  .who-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .who-line strong { font-size: 1.1rem; }
+  .link-btn {
+    background: none; border: none; padding: 0;
+    color: var(--text-muted); font-size: 0.85rem;
+    cursor: pointer; text-decoration: underline;
+  }
+
+  .chart-card h2 { margin: 0 0 2px; font-size: 1.05rem; }
+  .chart-card .sub { margin: 0 0 12px; font-size: 0.85rem; color: var(--text-muted); }
+  .chart-box { position: relative; height: 300px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--text-secondary); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; }
+
+  .msg { font-size: 0.9rem; margin-top: 10px; color: var(--text-secondary); min-height: 1.4em; }
+  .msg.ok { color: #0ca30c; }
+  .msg.err { color: #d03b3b; }
+  .hidden { display: none !important; }
+  footer { margin-top: 32px; font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>💪 Perut Tracker</h1>
+    <p>Weight &amp; lingkar perut, tracked together with friends.</p>
+  </header>
+
+  <div id="demo-banner" class="banner hidden">
+    <strong>Demo mode.</strong> No shared database is configured yet, so entries are
+    saved only in this browser and your friends can't see them. To share progress,
+    follow the free Supabase setup in the
+    <a href="https://github.com/ahmadfarisfs/perut#readme" target="_blank" rel="noopener">README</a>
+    and fill in <code>config.js</code>.
+  </div>
+
+  <!-- Step 1: who are you? -->
+  <section id="name-gate" class="card hidden">
+    <h2 style="margin-top:0">First, who are you?</h2>
+    <p style="color:var(--text-secondary); margin:4px 0 0">
+      Enter your name once — your check-ins will be saved under it and shown on the shared graphs.
+    </p>
+    <div class="chip-row" id="known-user-chips"></div>
+    <label for="name-input">Your name</label>
+    <input id="name-input" type="text" placeholder="e.g. Ahmad or Ian" autocomplete="name" maxlength="40" />
+    <div style="margin-top:14px">
+      <button class="btn" id="name-save-btn">Let's go</button>
+    </div>
+    <div class="msg" id="name-msg"></div>
+  </section>
+
+  <!-- Step 2: the app -->
+  <main id="app" class="hidden">
+    <section class="card">
+      <div class="who-line">
+        <span style="color:var(--text-secondary)">Sharing as</span>
+        <strong id="current-name"></strong>
+        <button class="link-btn" id="switch-user-btn">not you? switch</button>
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn btn-big" id="share-btn">📣 Share my progress</button>
+      </div>
+      <form id="entry-form" class="hidden" style="margin-top:16px">
+        <div class="field-row">
+          <div>
+            <label for="weight-input">Weight (kg)</label>
+            <input id="weight-input" type="number" inputmode="decimal" step="0.1" min="1" max="499" placeholder="e.g. 72.5" />
+          </div>
+          <div>
+            <label for="waist-input">Lingkar perut (cm)</label>
+            <input id="waist-input" type="number" inputmode="decimal" step="0.1" min="1" max="499" placeholder="e.g. 88" />
+          </div>
+          <div>
+            <label for="date-input">Date</label>
+            <input id="date-input" type="date" />
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:10px">
+          <button class="btn" type="submit" id="submit-btn">Save check-in</button>
+          <button class="btn btn-ghost" type="button" id="cancel-btn">Cancel</button>
+        </div>
+        <div class="msg" id="entry-msg"></div>
+      </form>
+    </section>
+
+    <section class="card chart-card">
+      <h2>Weight</h2>
+      <p class="sub">kg over time, one line per person</p>
+      <div class="chart-box"><canvas id="weight-chart" role="img" aria-label="Timeline of weight in kilograms per person"></canvas></div>
+    </section>
+
+    <section class="card chart-card">
+      <h2>Lingkar perut</h2>
+      <p class="sub">cm over time, one line per person</p>
+      <div class="chart-box"><canvas id="waist-chart" role="img" aria-label="Timeline of waist circumference in centimeters per person"></canvas></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 12px; font-size:1.05rem">Recent check-ins</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Who</th><th>Weight (kg)</th><th>Lingkar perut (cm)</th></tr>
+          </thead>
+          <tbody id="entries-tbody">
+            <tr><td colspan="4" style="color:var(--text-muted)">No check-ins yet — be the first! 🎉</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>Made for Ahmad &amp; Ian — but anyone can join, just enter your name.</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ── Series colors (validated categorical palette; fixed order, never cycled;
+      users beyond slot 8 reuse muted gray and rely on the legend/table) ── */
+const SERIES_LIGHT = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"];
+const SERIES_DARK  = ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#e66767", "#d55181", "#d95926"];
+const OVERFLOW_COLOR = "#898781";
+
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => darkQuery.matches;
+const seriesColor = (i) =>
+  i < 8 ? (isDark() ? SERIES_DARK : SERIES_LIGHT)[i] : OVERFLOW_COLOR;
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ── Backends: Supabase when configured, localStorage demo otherwise ──────── */
+const nameKeyOf = (name) => name.trim().toLowerCase().replace(/\s+/g, " ");
+
+function makeSupabaseBackend(url, key) {
+  const client = window.supabase.createClient(url, key);
+  return {
+    shared: true,
+    async listUsers() {
+      const { data, error } = await client
+        .from("users").select("id,name,name_key,created_at")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    async ensureUser(name) {
+      const key = nameKeyOf(name);
+      const { data: existing, error: selErr } = await client
+        .from("users").select("id,name,name_key").eq("name_key", key).maybeSingle();
+      if (selErr) throw selErr;
+      if (existing) return existing;
+      const { data, error } = await client
+        .from("users").insert({ name: name.trim(), name_key: key })
+        .select("id,name,name_key").single();
+      if (error) {
+        // Lost a race with a friend registering the same name — fetch theirs.
+        if (error.code === "23505") return this.ensureUser(name);
+        throw error;
+      }
+      return data;
+    },
+    async listMeasurements() {
+      const { data, error } = await client
+        .from("measurements")
+        .select("id,user_id,weight_kg,waist_cm,measured_at")
+        .order("measured_at", { ascending: true })
+        .limit(5000);
+      if (error) throw error;
+      return data;
+    },
+    async addMeasurement(row) {
+      const { error } = await client.from("measurements").insert(row);
+      if (error) throw error;
+    },
+  };
+}
+
+function makeLocalBackend() {
+  const KEY = "perut-demo-db";
+  const load = () => JSON.parse(localStorage.getItem(KEY) || '{"users":[],"measurements":[]}');
+  const save = (db) => localStorage.setItem(KEY, JSON.stringify(db));
+  return {
+    shared: false,
+    async listUsers() { return load().users; },
+    async ensureUser(name) {
+      const db = load();
+      const key = nameKeyOf(name);
+      let user = db.users.find((u) => u.name_key === key);
+      if (!user) {
+        user = { id: crypto.randomUUID(), name: name.trim(), name_key: key, created_at: new Date().toISOString() };
+        db.users.push(user);
+        save(db);
+      }
+      return user;
+    },
+    async listMeasurements() {
+      return load().measurements.slice().sort((a, b) => a.measured_at.localeCompare(b.measured_at));
+    },
+    async addMeasurement(row) {
+      const db = load();
+      db.measurements.push({ id: crypto.randomUUID(), ...row });
+      save(db);
+    },
+  };
+}
+
+const cfg = window.PERUT_CONFIG || {};
+const backend = cfg.supabaseUrl && cfg.supabaseAnonKey
+  ? makeSupabaseBackend(cfg.supabaseUrl, cfg.supabaseAnonKey)
+  : makeLocalBackend();
+
+/* ── DOM ───────────────────────────────────────────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+const nameGate = $("name-gate"), app = $("app");
+let charts = { weight: null, waist: null };
+let cache = { users: [], measurements: [] };
+
+/* Direct end-of-line labels: name in ink beside a series-colored dot. */
+const endLabelPlugin = {
+  id: "endLabels",
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    ctx.save();
+    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    chart.data.datasets.forEach((ds, i) => {
+      const meta = chart.getDatasetMeta(i);
+      if (meta.hidden || !meta.data.length) return;
+      const last = meta.data[meta.data.length - 1];
+      ctx.fillStyle = ds.borderColor;
+      ctx.beginPath();
+      ctx.arc(last.x + 8, last.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = css("--text-secondary");
+      ctx.fillText(ds.label, last.x + 14, last.y);
+    });
+    ctx.restore();
+  },
+};
+
+function buildChart(canvasId, metric, unit) {
+  const users = cache.users;
+  const datasets = users
+    .map((user, i) => {
+      const points = cache.measurements
+        .filter((m) => m.user_id === user.id && m[metric] != null)
+        .map((m) => ({ x: m.measured_at, y: Number(m[metric]) }));
+      return {
+        label: user.name,
+        data: points,
+        borderColor: seriesColor(i),
+        backgroundColor: seriesColor(i),
+        borderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBorderColor: css("--surface-1"),
+        pointBorderWidth: 2,
+        tension: 0.25,
+        spanGaps: true,
+      };
+    })
+    .filter((ds) => ds.data.length > 0);
+
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart($(canvasId === "weight" ? "weight-chart" : "waist-chart"), {
+    type: "line",
+    data: { datasets },
+    plugins: [endLabelPlugin],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { right: 70 } }, // room for direct end labels
+      interaction: { mode: "nearest", axis: "x", intersect: false },
+      scales: {
+        x: {
+          type: "time",
+          time: { unit: "day", tooltipFormat: "d MMM yyyy" },
+          grid: { color: css("--grid") },
+          border: { color: css("--axis") },
+          ticks: { color: css("--text-muted"), maxTicksLimit: 8 },
+        },
+        y: {
+          title: { display: true, text: unit, color: css("--text-muted") },
+          grid: { color: css("--grid") },
+          border: { display: false },
+          ticks: { color: css("--text-muted") },
+        },
+      },
+      plugins: {
+        legend: {
+          display: datasets.length > 1,
+          labels: { color: css("--text-secondary"), usePointStyle: true, pointStyleWidth: 10, boxHeight: 6 },
+        },
+        tooltip: {
+          backgroundColor: css("--surface-1"),
+          titleColor: css("--text-primary"),
+          bodyColor: css("--text-secondary"),
+          borderColor: css("--axis"),
+          borderWidth: 1,
+          callbacks: {
+            label: (item) => ` ${item.dataset.label}: ${item.parsed.y} ${unit}`,
+          },
+        },
+      },
+    },
+  });
+}
+
+function renderCharts() {
+  buildChart("weight", "weight_kg", "kg");
+  buildChart("waist", "waist_cm", "cm");
+}
+
+function renderTable() {
+  const tbody = $("entries-tbody");
+  const byId = Object.fromEntries(cache.users.map((u) => [u.id, u]));
+  const colorOf = (uid) => seriesColor(cache.users.findIndex((u) => u.id === uid));
+  const rows = cache.measurements.slice().reverse().slice(0, 30);
+  if (!rows.length) return;
+  tbody.innerHTML = rows
+    .map((m) => {
+      const user = byId[m.user_id];
+      const date = new Date(m.measured_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+      return `<tr>
+        <td>${date}</td>
+        <td><span class="dot" style="background:${colorOf(m.user_id)}"></span>${user ? user.name : "?"}</td>
+        <td class="num">${m.weight_kg ?? "—"}</td>
+        <td class="num">${m.waist_cm ?? "—"}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function refreshData() {
+  const [users, measurements] = await Promise.all([backend.listUsers(), backend.listMeasurements()]);
+  cache = { users, measurements };
+  renderCharts();
+  renderTable();
+}
+
+/* ── Name gate ─────────────────────────────────────────────────────────────── */
+const NAME_STORE = "perut-current-user-name";
+
+async function showNameGate() {
+  nameGate.classList.remove("hidden");
+  app.classList.add("hidden");
+  try {
+    const users = await backend.listUsers();
+    $("known-user-chips").innerHTML = users
+      .slice(0, 8)
+      .map((u) => `<button type="button" class="chip" data-name="${u.name.replace(/"/g, "&quot;")}">${u.name}</button>`)
+      .join("");
+    for (const chip of document.querySelectorAll("#known-user-chips .chip")) {
+      chip.addEventListener("click", () => enter(chip.dataset.name));
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function enter(name) {
+  const msg = $("name-msg");
+  if (!name || !name.trim()) {
+    msg.textContent = "Please type your name first.";
+    msg.className = "msg err";
+    return;
+  }
+  msg.textContent = "Joining…";
+  msg.className = "msg";
+  try {
+    const user = await backend.ensureUser(name);
+    localStorage.setItem(NAME_STORE, user.name);
+    await showApp(user.name);
+  } catch (e) {
+    console.error(e);
+    msg.textContent = "Could not connect to the database — check config.js / your network.";
+    msg.className = "msg err";
+  }
+}
+
+async function showApp(name) {
+  $("current-name").textContent = name;
+  nameGate.classList.add("hidden");
+  app.classList.remove("hidden");
+  $("date-input").value = new Date().toISOString().slice(0, 10);
+  try {
+    await refreshData();
+  } catch (e) {
+    console.error(e);
+    $("entry-msg").textContent = "Could not load shared data — check config.js.";
+    $("entry-msg").className = "msg err";
+  }
+}
+
+/* ── Events ────────────────────────────────────────────────────────────────── */
+$("name-save-btn").addEventListener("click", () => enter($("name-input").value));
+$("name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") enter($("name-input").value); });
+
+$("switch-user-btn").addEventListener("click", () => {
+  localStorage.removeItem(NAME_STORE);
+  showNameGate();
+});
+
+$("share-btn").addEventListener("click", () => {
+  $("entry-form").classList.toggle("hidden");
+  $("weight-input").focus();
+});
+$("cancel-btn").addEventListener("click", () => $("entry-form").classList.add("hidden"));
+
+$("entry-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("entry-msg");
+  const weight = $("weight-input").value ? Number($("weight-input").value) : null;
+  const waist = $("waist-input").value ? Number($("waist-input").value) : null;
+  if (weight == null && waist == null) {
+    msg.textContent = "Fill in at least one of weight or lingkar perut.";
+    msg.className = "msg err";
+    return;
+  }
+  const dateStr = $("date-input").value || new Date().toISOString().slice(0, 10);
+  // Store the chosen calendar day at local noon so it lands on the right day
+  // for viewers in nearby timezones.
+  const measuredAt = new Date(dateStr + "T12:00:00").toISOString();
+  $("submit-btn").disabled = true;
+  msg.textContent = "Saving…";
+  msg.className = "msg";
+  try {
+    const user = await backend.ensureUser(localStorage.getItem(NAME_STORE));
+    await backend.addMeasurement({ user_id: user.id, weight_kg: weight, waist_cm: waist, measured_at: measuredAt });
+    await refreshData();
+    msg.textContent = backend.shared ? "Shared! Your friends can see it now. 🎉" : "Saved locally (demo mode). 🎉";
+    msg.className = "msg ok";
+    $("weight-input").value = "";
+    $("waist-input").value = "";
+  } catch (err) {
+    console.error(err);
+    msg.textContent = "Could not save — " + (err.message || "unknown error");
+    msg.className = "msg err";
+  } finally {
+    $("submit-btn").disabled = false;
+  }
+});
+
+darkQuery.addEventListener("change", () => {
+  if (!app.classList.contains("hidden")) { renderCharts(); renderTable(); }
+});
+
+/* ── Boot ──────────────────────────────────────────────────────────────────── */
+if (!backend.shared) $("demo-banner").classList.remove("hidden");
+const savedName = localStorage.getItem(NAME_STORE);
+if (savedName) showApp(savedName); else showNameGate();
+</script>
+</body>
+</html>
