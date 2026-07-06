@@ -437,24 +437,41 @@ const nameKeyOf = (name) => name.trim().toLowerCase().replace(/\s+/g, " ");
 
 function makeSupabaseBackend(url, key) {
   const client = window.supabase.createClient(url, key);
+  // 42703 = the profile columns (height_cm, birth_date) don't exist yet —
+  // the database predates that setup.sql block. Fall back to the legacy
+  // shape so the app keeps working; the profile card simply stays hidden.
+  const PROFILE_COLS = "id,name,name_key,height_cm,birth_date";
+  const LEGACY_COLS = "id,name,name_key";
   return {
     shared: true,
+    profileSupported: true,
     async listUsers() {
-      const { data, error } = await client
-        .from("users").select("id,name,name_key,height_cm,birth_date,created_at")
+      let { data, error } = await client
+        .from("users").select(PROFILE_COLS + ",created_at")
         .order("created_at", { ascending: true });
+      if (error && error.code === "42703") {
+        this.profileSupported = false;
+        ({ data, error } = await client
+          .from("users").select(LEGACY_COLS + ",created_at")
+          .order("created_at", { ascending: true }));
+      }
       if (error) throw error;
       return data;
     },
     async ensureUser(name) {
       const key = nameKeyOf(name);
-      const { data: existing, error: selErr } = await client
-        .from("users").select("id,name,name_key,height_cm,birth_date").eq("name_key", key).maybeSingle();
+      const cols = this.profileSupported ? PROFILE_COLS : LEGACY_COLS;
+      let { data: existing, error: selErr } = await client
+        .from("users").select(cols).eq("name_key", key).maybeSingle();
+      if (selErr && selErr.code === "42703") {
+        this.profileSupported = false;
+        return this.ensureUser(name);
+      }
       if (selErr) throw selErr;
       if (existing) return existing;
       const { data, error } = await client
         .from("users").insert({ name: name.trim(), name_key: key })
-        .select("id,name,name_key,height_cm,birth_date").single();
+        .select(this.profileSupported ? PROFILE_COLS : LEGACY_COLS).single();
       if (error) {
         // Lost a race with a friend registering the same name — fetch theirs.
         if (error.code === "23505") return this.ensureUser(name);
@@ -493,6 +510,7 @@ function makeLocalBackend() {
   const save = (db) => localStorage.setItem(KEY, JSON.stringify(db));
   return {
     shared: false,
+    profileSupported: true,
     async listUsers() { return load().users; },
     async ensureUser(name) {
       const db = load();
@@ -661,7 +679,7 @@ function renderStats() {
   if (!me) { $("stats").innerHTML = ""; $("derived-stats").innerHTML = ""; return; }
 
   // One-time profile gate + meta line beside the name
-  $("profile-card").classList.toggle("hidden", !!(me.height_cm && me.birth_date));
+  $("profile-card").classList.toggle("hidden", backend.profileSupported === false || !!(me.height_cm && me.birth_date));
   const meta = [];
   if (me.birth_date) meta.push(`${ageOf(me.birth_date)} yo`);
   if (me.height_cm) meta.push(`${Number(me.height_cm)} cm`);
