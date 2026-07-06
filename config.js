@@ -13,5 +13,5 @@ window.PERUT_CONFIG = {
   // with `npx web-push generate-vapid-keys`, paste the PUBLIC key here, and
   // add the private key as the VAPID_PRIVATE_KEY repository secret.
   // While this is empty the reminders button simply stays hidden.
-  vapidPublicKey: "",
+  vapidPublicKey: "BP2V7UdW0MeoHJyMBBnaaUcsgRy6cuABVJFFKGHNURfdYngwuA6TI5ySsm42r7x-se8Sk3IfcFgoIhqpCbiVaOs",
 };
