@@ -11,9 +11,11 @@ permissions:
   pages: write
   id-token: write
 
+# Queue deploys rather than cancelling: a cancelled deploy-pages job strands
+# an "in progress" deployment on GitHub's side that blocks the next one.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
