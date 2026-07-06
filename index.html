@@ -301,10 +301,33 @@
       <div class="who-line">
         <span class="label-sm">Athlete</span>
         <strong class="display" id="current-name"></strong>
+        <span id="athlete-meta" style="color:var(--text-muted); font-size:0.9rem; font-weight:600"></span>
         <button class="link-btn" id="switch-user-btn">not you? switch</button>
       </div>
 
+      <div id="profile-card" class="hidden" style="margin-top:16px; padding:16px; background:var(--surface-2); border:1px solid var(--border); border-radius:12px">
+        <div style="font-weight:800; text-transform:uppercase; letter-spacing:0.05em; font-size:0.9rem">Complete your profile — one time</div>
+        <p style="margin:4px 0 0; color:var(--text-secondary); font-size:0.9rem">
+          Height and birth date unlock BMI, waist-to-height ratio, and forecasts. Set once — they can't be changed later.
+        </p>
+        <div class="field-row">
+          <div>
+            <label for="height-input">Height (cm)</label>
+            <input id="height-input" type="number" inputmode="decimal" step="0.5" min="51" max="299" placeholder="e.g. 172" />
+          </div>
+          <div>
+            <label for="birth-input">Birth date</label>
+            <input id="birth-input" type="date" />
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn btn-small" id="profile-save-btn">Save profile</button>
+        </div>
+        <div class="msg" id="profile-msg"></div>
+      </div>
+
       <div class="stats" id="stats" aria-label="Your progress since your first check-in"></div>
+      <div class="stats" id="derived-stats" aria-label="Statistics derived from your profile and check-ins"></div>
 
       <div style="margin-top:18px">
         <button class="btn btn-big display" id="share-btn">Share my progress</button>
@@ -346,6 +369,12 @@
       <h2 class="display">The Board — Lingkar Perut</h2>
       <p class="sub">cm over time, one line per athlete</p>
       <div class="chart-box"><canvas id="waist-chart" role="img" aria-label="Timeline of waist circumference in centimeters per person"></canvas></div>
+    </section>
+
+    <section class="card hidden" id="crew-card">
+      <h2 class="display" style="margin:0 0 2px; font-size:1.25rem">The Crew</h2>
+      <p class="sub" style="margin:0 0 12px; font-size:0.85rem; color:var(--text-muted)">everyone's combined effort</p>
+      <div class="stats" id="crew-stats" style="margin-top:0"></div>
     </section>
 
     <section class="card">
@@ -412,7 +441,7 @@ function makeSupabaseBackend(url, key) {
     shared: true,
     async listUsers() {
       const { data, error } = await client
-        .from("users").select("id,name,name_key,created_at")
+        .from("users").select("id,name,name_key,height_cm,birth_date,created_at")
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
@@ -420,12 +449,12 @@ function makeSupabaseBackend(url, key) {
     async ensureUser(name) {
       const key = nameKeyOf(name);
       const { data: existing, error: selErr } = await client
-        .from("users").select("id,name,name_key").eq("name_key", key).maybeSingle();
+        .from("users").select("id,name,name_key,height_cm,birth_date").eq("name_key", key).maybeSingle();
       if (selErr) throw selErr;
       if (existing) return existing;
       const { data, error } = await client
         .from("users").insert({ name: name.trim(), name_key: key })
-        .select("id,name,name_key").single();
+        .select("id,name,name_key,height_cm,birth_date").single();
       if (error) {
         // Lost a race with a friend registering the same name — fetch theirs.
         if (error.code === "23505") return this.ensureUser(name);
@@ -450,6 +479,10 @@ function makeSupabaseBackend(url, key) {
       const { error } = await client.from("push_subscriptions").insert(row);
       // 23505 = this device is already registered; that's fine.
       if (error && error.code !== "23505") throw error;
+    },
+    async updateProfile(userId, fields) {
+      const { error } = await client.from("users").update(fields).eq("id", userId);
+      if (error) throw error;
     },
   };
 }
@@ -478,6 +511,15 @@ function makeLocalBackend() {
     async addMeasurement(row) {
       const db = load();
       db.measurements.push({ id: crypto.randomUUID(), ...row });
+      save(db);
+    },
+    async updateProfile(userId, fields) {
+      const db = load();
+      const user = db.users.find((u) => u.id === userId);
+      if (!user) return;
+      // Same fill-once rule the shared database enforces with a trigger.
+      if (user.height_cm == null && fields.height_cm != null) user.height_cm = fields.height_cm;
+      if (user.birth_date == null && fields.birth_date != null) user.birth_date = fields.birth_date;
       save(db);
     },
   };
@@ -590,32 +632,122 @@ function renderCharts() {
   buildChart("waist", "waist_cm", "cm");
 }
 
-/* Hero stat tiles: current value + change since first check-in (down = win). */
+/* ── Stats ─────────────────────────────────────────────────────────────────── */
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const tile = (k, v, d, dClass = "flat", vStyle = "") =>
+  `<div class="stat"><div class="k">${k}</div><div class="v" style="${vStyle}">${v}</div><div class="d ${dClass}">${d}</div></div>`;
+const fmtDate = (ms) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+/* Asian-Pacific BMI categories (WHO regional cutoffs, fits Indonesia). */
+function bmiCategory(bmi) {
+  if (bmi < 18.5) return { label: "underweight", cls: "flat" };
+  if (bmi < 23) return { label: "healthy", cls: "down" };
+  if (bmi < 25) return { label: "overweight risk", cls: "up" };
+  if (bmi < 30) return { label: "obese I", cls: "up" };
+  return { label: "obese II", cls: "up" };
+}
+
+function ageOf(birthDate) {
+  const b = new Date(birthDate), n = new Date();
+  let a = n.getFullYear() - b.getFullYear();
+  if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--;
+  return a;
+}
+
+/* Hero tiles (current + change since start), derived tiles, profile gate,
+   athlete meta line, and the crew section. */
 function renderStats() {
-  const box = $("stats");
   const me = cache.users.find((u) => u.name === localStorage.getItem(NAME_STORE));
-  if (!me) { box.innerHTML = ""; return; }
-  const tiles = [
-    { key: "weight_kg", label: "Weight", unit: "kg" },
-    { key: "waist_cm", label: "Lingkar perut", unit: "cm" },
-  ].map(({ key, label, unit }) => {
-    const mine = cache.measurements.filter((m) => m.user_id === me.id && m[key] != null);
-    if (!mine.length) {
-      return `<div class="stat"><div class="k">${label}</div>
-        <div class="v" style="color:var(--text-muted)">—</div>
-        <div class="d flat">log your first check-in</div></div>`;
-    }
-    const first = Number(mine[0][key]);
-    const now = Number(mine[mine.length - 1][key]);
-    const delta = +(now - first).toFixed(1);
-    let d;
-    if (mine.length < 2 || delta === 0) d = `<div class="d flat">— steady since start</div>`;
-    else if (delta < 0) d = `<div class="d down">▼ ${Math.abs(delta)} ${unit} since start</div>`;
-    else d = `<div class="d up">▲ ${delta} ${unit} since start</div>`;
-    return `<div class="stat"><div class="k">${label}</div>
-      <div class="v">${now} <span class="unit">${unit}</span></div>${d}</div>`;
+  if (!me) { $("stats").innerHTML = ""; $("derived-stats").innerHTML = ""; return; }
+
+  // One-time profile gate + meta line beside the name
+  $("profile-card").classList.toggle("hidden", !!(me.height_cm && me.birth_date));
+  const meta = [];
+  if (me.birth_date) meta.push(`${ageOf(me.birth_date)} yo`);
+  if (me.height_cm) meta.push(`${Number(me.height_cm)} cm`);
+  $("athlete-meta").textContent = meta.length ? "· " + meta.join(" · ") : "";
+
+  const mineAll = cache.measurements.filter((m) => m.user_id === me.id);
+  const series = (key) => mineAll.filter((m) => m[key] != null).map((m) => ({ t: new Date(m.measured_at).getTime(), v: Number(m[key]) }));
+  const weights = series("weight_kg");
+  const waists = series("waist_cm");
+
+  // Row 1: the two hero tiles
+  $("stats").innerHTML = [
+    { pts: weights, label: "Weight", unit: "kg" },
+    { pts: waists, label: "Lingkar perut", unit: "cm" },
+  ].map(({ pts, label, unit }) => {
+    if (!pts.length) return tile(label, `<span style="color:var(--text-muted)">—</span>`, "log your first check-in");
+    const now = pts[pts.length - 1].v, delta = +(now - pts[0].v).toFixed(1);
+    const d = pts.length < 2 || delta === 0 ? ["— steady since start", "flat"]
+      : delta < 0 ? [`▼ ${Math.abs(delta)} ${unit} since start`, "down"]
+      : [`▲ ${delta} ${unit} since start`, "up"];
+    return tile(label, `${now} <span class="unit">${unit}</span>`, d[0], d[1]);
+  }).join("");
+
+  // Row 2: derived statistics
+  const derived = [];
+  const h = me.height_cm ? Number(me.height_cm) / 100 : null;
+  const weightNow = weights.length ? weights[weights.length - 1].v : null;
+  const waistNow = waists.length ? waists[waists.length - 1].v : null;
+  const healthyMax = h ? 22.9 * h * h : null;
+
+  let bmi = null;
+  if (h && weightNow != null) {
+    bmi = weightNow / (h * h);
+    const cat = bmiCategory(bmi);
+    derived.push(tile("BMI", bmi.toFixed(1), `${cat.label} · healthy: ${(18.5 * h * h).toFixed(0)}–${healthyMax.toFixed(0)} kg`, cat.cls));
+  }
+
+  if (h && waistNow != null) {
+    const whtr = waistNow / (h * 100);
+    derived.push(tile("Waist ÷ height", whtr.toFixed(2),
+      whtr < 0.5 ? "on target (keep it under 0.50)" : "target < 0.50 — perut vs tinggi", whtr < 0.5 ? "down" : "up"));
+  }
+
+  // Pace over the last 28 days, plus a forecast when cutting
+  const cut = weights.filter((p) => p.t >= Date.now() - 28 * 86400000);
+  if (cut.length >= 2 && cut[cut.length - 1].t - cut[0].t >= 3 * 86400000) {
+    const days = (cut[cut.length - 1].t - cut[0].t) / 86400000;
+    const pace = ((cut[cut.length - 1].v - cut[0].v) / days) * 7;
+    let sub = "kg per week, last 28 days", cls = "flat";
+    if (pace < -0.05) {
+      cls = "down";
+      if (healthyMax && weightNow > healthyMax) {
+        const weeks = (weightNow - healthyMax) / -pace;
+        sub = weeks <= 104 ? `healthy BMI around ${fmtDate(Date.now() + weeks * 7 * 86400000)}` : "keep going — every week counts";
+      } else if (healthyMax) sub = "already in the healthy zone — maintain";
+    } else if (pace > 0.05) cls = "up";
+    derived.push(tile("Pace", `${pace > 0 ? "+" : ""}${pace.toFixed(2)} <span class="unit">kg/wk</span>`, sub, cls));
+  }
+
+  const my30 = mineAll.filter((m) => new Date(m.measured_at).getTime() >= Date.now() - 30 * 86400000).length;
+  derived.push(tile("Consistency", String(my30), "check-ins in the last 30 days", my30 >= 4 ? "down" : "flat"));
+
+  $("derived-stats").innerHTML = derived.join("");
+
+  // The Crew: combined effort across everyone
+  const crew = cache.users.map((u) => {
+    const pts = cache.measurements.filter((m) => m.user_id === u.id && m.weight_kg != null);
+    const c30 = cache.measurements.filter((m) => m.user_id === u.id && new Date(m.measured_at).getTime() >= Date.now() - 30 * 86400000).length;
+    return { u, delta: pts.length >= 2 ? Number(pts[pts.length - 1].weight_kg) - Number(pts[0].weight_kg) : null, c30 };
   });
-  box.innerHTML = tiles.join("");
+  const withDelta = crew.filter((c) => c.delta != null);
+  const active = crew.filter((c) => c.c30 > 0);
+  $("crew-card").classList.toggle("hidden", !withDelta.length && !active.length);
+  const crewTiles = [];
+  if (withDelta.length) {
+    const net = withDelta.reduce((s, c) => s + c.delta, 0);
+    crewTiles.push(tile("Crew net", `${net > 0 ? "+" : ""}${net.toFixed(1)} <span class="unit">kg</span>`,
+      "everyone combined, first → latest", net < 0 ? "down" : net > 0 ? "up" : "flat"));
+    const top = withDelta.reduce((a, b) => (b.delta < a.delta ? b : a));
+    if (top.delta < 0) crewTiles.push(tile("Top cutter", esc(top.u.name), `${top.delta.toFixed(1)} kg since start`, "down"));
+  }
+  if (active.length) {
+    const steady = active.reduce((a, b) => (b.c30 > a.c30 ? b : a));
+    crewTiles.push(tile("Most consistent", esc(steady.u.name), `${steady.c30} check-ins in 30 days`, "flat"));
+  }
+  $("crew-stats").innerHTML = crewTiles.join("");
 }
 
 function renderTable() {
@@ -691,6 +823,7 @@ async function showApp(name) {
   nameGate.classList.add("hidden");
   app.classList.remove("hidden");
   $("date-input").value = new Date().toISOString().slice(0, 10);
+  $("birth-input").max = new Date().toISOString().slice(0, 10);
   refreshRemindersUI();
   try {
     await refreshData();
@@ -708,6 +841,40 @@ $("name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") ente
 $("switch-user-btn").addEventListener("click", () => {
   localStorage.removeItem(NAME_STORE);
   showNameGate();
+});
+
+$("profile-save-btn").addEventListener("click", async () => {
+  const msg = $("profile-msg");
+  const height = $("height-input").value ? Number($("height-input").value) : null;
+  const birth = $("birth-input").value || null;
+  if (height == null && !birth) {
+    msg.textContent = "Fill in your height, birth date, or both.";
+    msg.className = "msg err";
+    return;
+  }
+  if (birth && new Date(birth) >= new Date()) {
+    msg.textContent = "Birth date must be in the past.";
+    msg.className = "msg err";
+    return;
+  }
+  $("profile-save-btn").disabled = true;
+  msg.textContent = "Saving…";
+  msg.className = "msg";
+  try {
+    const me = await backend.ensureUser(localStorage.getItem(NAME_STORE));
+    const fields = {};
+    if (height != null && me.height_cm == null) fields.height_cm = height;
+    if (birth && me.birth_date == null) fields.birth_date = birth;
+    if (Object.keys(fields).length) await backend.updateProfile(me.id, fields);
+    await refreshData();
+    msg.textContent = "";
+  } catch (e) {
+    console.error(e);
+    msg.textContent = "Could not save profile — " + (e.message || "unknown error");
+    msg.className = "msg err";
+  } finally {
+    $("profile-save-btn").disabled = false;
+  }
 });
 
 $("share-btn").addEventListener("click", () => {

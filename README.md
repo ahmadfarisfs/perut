@@ -74,8 +74,14 @@ Designed to be general so more people can join later:
 
 | table | columns |
 |---|---|
-| `users` | `id`, `name` (display), `name_key` (lowercased, unique — the identity), `created_at` |
+| `users` | `id`, `name` (display), `name_key` (lowercased, unique — the identity), `height_cm`, `birth_date`, `created_at` |
 | `measurements` | `id`, `user_id → users.id`, `weight_kg`, `waist_cm`, `measured_at`, `created_at` |
+
+Height and birth date are optional one-time profile fields (a trigger makes
+them fill-once and freezes names). They unlock the derived statistics on the
+dashboard: BMI with Asian-Pacific categories and your healthy weight range,
+waist-to-height ratio (target < 0.50), weekly pace with a forecast date for
+reaching healthy BMI, 30-day consistency, and combined crew stats.
 
 Either metric can be left empty on a check-in (but not both). Row Level
 Security allows the public key to **read and insert only** — no updates or

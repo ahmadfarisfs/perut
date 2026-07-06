@@ -47,6 +47,35 @@ create policy "anyone can read measurements"
 create policy "anyone can share progress"
   on public.measurements for insert with check (true);
 
+-- ── Profile: height & birth date (one-time inputs) ──────────────────────────
+-- If you already ran the tables above, you can run just this block.
+-- Both fields are optional and can be FILLED ONCE: a trigger silently keeps
+-- the old value on any later change, and also freezes name/name_key, so the
+-- public anon key can never rename anyone even though updates are allowed.
+
+alter table public.users
+  add column if not exists height_cm  numeric(4,1) check (height_cm > 50 and height_cm < 300),
+  add column if not exists birth_date date check (birth_date > '1900-01-01');
+
+create or replace function public.protect_user_profile() returns trigger
+language plpgsql as $$
+begin
+  new.name := old.name;
+  new.name_key := old.name_key;
+  new.created_at := old.created_at;
+  if old.height_cm  is not null then new.height_cm  := old.height_cm;  end if;
+  if old.birth_date is not null then new.birth_date := old.birth_date; end if;
+  return new;
+end $$;
+
+drop trigger if exists protect_user_profile on public.users;
+create trigger protect_user_profile before update on public.users
+  for each row execute function public.protect_user_profile();
+
+drop policy if exists "anyone can complete their profile" on public.users;
+create policy "anyone can complete their profile"
+  on public.users for update using (true) with check (true);
+
 -- ── Push reminders (optional feature) ────────────────────────────────────────
 -- If you already ran the tables above, you can run just this block.
 -- Devices register here when a user taps "Enable daily reminders". The anon
