@@ -47,11 +47,12 @@ create policy "anyone can read measurements"
 create policy "anyone can share progress"
   on public.measurements for insert with check (true);
 
--- ── Profile: height & birth date (one-time inputs) ──────────────────────────
--- If you already ran the tables above, you can run just this block.
--- Both fields are optional and can be FILLED ONCE: a trigger silently keeps
--- the old value on any later change, and also freezes name/name_key, so the
--- public anon key can never rename anyone even though updates are allowed.
+-- ── Profile: height & birth date ─────────────────────────────────────────────
+-- If you already ran the tables above, you can run just this block — it is
+-- idempotent, and re-running it also upgrades an older fill-once version.
+-- Both fields are optional and editable from the app's "edit profile". The
+-- trigger freezes name/name_key, so the public anon key can never rename
+-- anyone even though updates are allowed.
 
 alter table public.users
   add column if not exists height_cm  numeric(4,1) check (height_cm > 50 and height_cm < 300),
@@ -63,8 +64,6 @@ begin
   new.name := old.name;
   new.name_key := old.name_key;
   new.created_at := old.created_at;
-  if old.height_cm  is not null then new.height_cm  := old.height_cm;  end if;
-  if old.birth_date is not null then new.birth_date := old.birth_date; end if;
   return new;
 end $$;
 

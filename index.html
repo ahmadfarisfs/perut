@@ -302,13 +302,14 @@
         <span class="label-sm">Athlete</span>
         <strong class="display" id="current-name"></strong>
         <span id="athlete-meta" style="color:var(--text-muted); font-size:0.9rem; font-weight:600"></span>
+        <button class="link-btn hidden" id="edit-profile-btn">edit profile</button>
         <button class="link-btn" id="switch-user-btn">not you? switch</button>
       </div>
 
       <div id="profile-card" class="hidden" style="margin-top:16px; padding:16px; background:var(--surface-2); border:1px solid var(--border); border-radius:12px">
-        <div style="font-weight:800; text-transform:uppercase; letter-spacing:0.05em; font-size:0.9rem">Complete your profile — one time</div>
+        <div style="font-weight:800; text-transform:uppercase; letter-spacing:0.05em; font-size:0.9rem">Your profile</div>
         <p style="margin:4px 0 0; color:var(--text-secondary); font-size:0.9rem">
-          Height and birth date unlock BMI, waist-to-height ratio, and forecasts. Set once — they can't be changed later.
+          Height and birth date power BMI, waist-to-height ratio, and forecasts. You can update them anytime — the stats recalculate instantly.
         </p>
         <div class="field-row">
           <div>
@@ -320,8 +321,9 @@
             <input id="birth-input" type="date" />
           </div>
         </div>
-        <div style="margin-top:12px">
+        <div style="margin-top:12px; display:flex; gap:10px">
           <button class="btn btn-small" id="profile-save-btn">Save profile</button>
+          <button class="btn btn-ghost btn-small hidden" id="profile-close-btn" type="button">Close</button>
         </div>
         <div class="msg" id="profile-msg"></div>
       </div>
@@ -535,9 +537,8 @@ function makeLocalBackend() {
       const db = load();
       const user = db.users.find((u) => u.id === userId);
       if (!user) return;
-      // Same fill-once rule the shared database enforces with a trigger.
-      if (user.height_cm == null && fields.height_cm != null) user.height_cm = fields.height_cm;
-      if (user.birth_date == null && fields.birth_date != null) user.birth_date = fields.birth_date;
+      if (fields.height_cm != null) user.height_cm = fields.height_cm;
+      if (fields.birth_date != null) user.birth_date = fields.birth_date;
       save(db);
     },
   };
@@ -553,6 +554,7 @@ const $ = (id) => document.getElementById(id);
 const nameGate = $("name-gate"), app = $("app");
 let charts = { weight: null, waist: null };
 let cache = { users: [], measurements: [] };
+let profileOpen = false; // "edit profile" toggles the profile card
 
 /* Direct end-of-line labels: name in ink beside a series-colored dot. */
 const endLabelPlugin = {
@@ -678,8 +680,16 @@ function renderStats() {
   const me = cache.users.find((u) => u.name === localStorage.getItem(NAME_STORE));
   if (!me) { $("stats").innerHTML = ""; $("derived-stats").innerHTML = ""; return; }
 
-  // One-time profile gate + meta line beside the name
-  $("profile-card").classList.toggle("hidden", backend.profileSupported === false || !!(me.height_cm && me.birth_date));
+  // Profile card: auto-open while fields are missing, or on "edit profile"
+  const profileMissing = !me.height_cm || !me.birth_date;
+  const showProfile = backend.profileSupported !== false && (profileMissing || profileOpen);
+  $("profile-card").classList.toggle("hidden", !showProfile);
+  $("profile-close-btn").classList.toggle("hidden", profileMissing);
+  $("edit-profile-btn").classList.toggle("hidden", backend.profileSupported === false || showProfile);
+  if (showProfile && document.activeElement !== $("height-input") && document.activeElement !== $("birth-input")) {
+    $("height-input").value = me.height_cm ?? "";
+    $("birth-input").value = me.birth_date ?? "";
+  }
   const meta = [];
   if (me.birth_date) meta.push(`${ageOf(me.birth_date)} yo`);
   if (me.height_cm) meta.push(`${Number(me.height_cm)} cm`);
@@ -861,6 +871,17 @@ $("switch-user-btn").addEventListener("click", () => {
   showNameGate();
 });
 
+$("edit-profile-btn").addEventListener("click", () => {
+  profileOpen = true;
+  renderStats();
+  $("height-input").focus();
+});
+$("profile-close-btn").addEventListener("click", () => {
+  profileOpen = false;
+  $("profile-msg").textContent = "";
+  renderStats();
+});
+
 $("profile-save-btn").addEventListener("click", async () => {
   const msg = $("profile-msg");
   const height = $("height-input").value ? Number($("height-input").value) : null;
@@ -881,11 +902,24 @@ $("profile-save-btn").addEventListener("click", async () => {
   try {
     const me = await backend.ensureUser(localStorage.getItem(NAME_STORE));
     const fields = {};
-    if (height != null && me.height_cm == null) fields.height_cm = height;
-    if (birth && me.birth_date == null) fields.birth_date = birth;
-    if (Object.keys(fields).length) await backend.updateProfile(me.id, fields);
+    if (height != null) fields.height_cm = height;
+    if (birth) fields.birth_date = birth;
+    await backend.updateProfile(me.id, fields);
+    profileOpen = false;
     await refreshData();
-    msg.textContent = "";
+    // A database still running the old fill-once trigger silently keeps the
+    // previous values — detect that and say so instead of pretending.
+    const after = cache.users.find((u) => u.id === me.id) || {};
+    const blocked = (height != null && Number(after.height_cm) !== height) ||
+      (birth && after.birth_date !== birth);
+    if (blocked) {
+      profileOpen = true;
+      renderStats();
+      msg.textContent = "Saved values were kept by the database's old fill-once rule — re-run the Profile block from setup.sql to allow edits.";
+      msg.className = "msg err";
+    } else {
+      msg.textContent = "";
+    }
   } catch (e) {
     console.error(e);
     msg.textContent = "Could not save profile — " + (e.message || "unknown error");
@@ -1035,8 +1069,12 @@ if ("serviceWorker" in navigator) {
   }).catch((e) => console.warn("sw registration failed", e));
 
   // The new worker took over (user tapped Update) — load the new version once.
+  // The very first claim on a fresh visit also fires controllerchange; that
+  // one must not reload.
+  let hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) { hadController = true; return; }
     if (reloading) return;
     reloading = true;
     location.reload();
